@@ -9,6 +9,7 @@ from fastmcp import Context
 
 from app.storage.chroma_store import get_chroma
 from app.storage.sqlite_store import get_store
+from app.config import config
 
 
 async def search_chunks(
@@ -93,7 +94,7 @@ async def get_crawl_stats(
         "sqlite": sqlite_stats,
         "chromadb": {
             "total_chunks": chroma_count,
-            "embed_model": "nomic-embed-text",
+            "embed_model": config.OLLAMA_EMBED_MODEL,
         },
         "session_id": session_id,
     }

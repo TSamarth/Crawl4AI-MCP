@@ -9,7 +9,7 @@ Results are stored in SQLite + ChromaDB for later semantic search.
 """
 from __future__ import annotations
 
-import asyncio
+# import asyncio
 from typing import Any, Dict, List, Optional
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig

@@ -74,11 +74,28 @@ class Config:
     )
 
     # ── Chunking ─────────────────────────────────────────────────────────────
+    # Hard context-window limit of the embedding model (in its own tokens).
+    # Used to derive a safe CHUNK_SIZE_TOKENS when not explicitly set.
+    EMBED_MODEL_MAX_TOKENS: int = field(
+        default_factory=lambda: _env_int("EMBED_MODEL_MAX_TOKENS", 512)
+    )
+    # Safety factor: cl100k (tiktoken) produces fewer tokens than BERT-style
+    # tokenizers for the same text.  For typical English prose the ratio is
+    # ~1.33×, but URL-dense or minified-code content can reach 1.7–1.8×.
+    # 0.6 × 512 = 307 → rounded to 304, giving headroom for worst-case inputs.
+    EMBED_TOKENIZER_SAFETY_FACTOR: float = field(
+        default_factory=lambda: _env_float("EMBED_TOKENIZER_SAFETY_FACTOR", 0.6)
+    )
     CHUNK_SIZE_TOKENS: int = field(
-        default_factory=lambda: _env_int("CHUNK_SIZE_TOKENS", 512)
+        default_factory=lambda: _env_int(
+            "CHUNK_SIZE_TOKENS",
+            # Default: 60% of embed model window, rounded down to nearest 8
+            int(_env_int("EMBED_MODEL_MAX_TOKENS", 512)
+                * _env_float("EMBED_TOKENIZER_SAFETY_FACTOR", 0.6 ) // 8 * 8),
+        )
     )
     CHUNK_OVERLAP_TOKENS: int = field(
-        default_factory=lambda: _env_int("CHUNK_OVERLAP_TOKENS", 50)
+        default_factory=lambda: _env_int("CHUNK_OVERLAP_TOKENS", 40)
     )
 
     def ensure_data_dirs(self) -> None:

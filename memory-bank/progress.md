@@ -25,9 +25,9 @@
 - [x] Tests validated — all 20 pass (6 storage, 6 triage+search, 8 crawl+deep_crawl)
 - [ ] AdaptiveCrawler `max_pages` param name needs verification for v0.8.6
 - [x] README written (README.md)
-- [ ] crawl4ai-setup not run (Playwright browser install)
-- [ ] .env file not created from .env.example
-- [ ] Ollama models not verified (nomic-embed-text, llama3.2)
+- [x] crawl4ai-setup run — Playwright + Patchright browsers installed ✅
+- [x] .env file created (OLLAMA_EMBED_MODEL=mxbai-embed-large) ✅
+- [x] mxbai-embed-large pulled via Ollama ✅
 
 ## Known Decisions / Trade-offs
 1. **Re-crawl in adaptive_crawl:** AdaptiveCrawler doesn't expose per-page results

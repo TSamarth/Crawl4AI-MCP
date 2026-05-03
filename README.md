@@ -95,7 +95,7 @@ ollama pull llama3.2
 ## Running the server
 
 ```bash
-uv run python -m app.server
+uv run python main.py
 ```
 
 The server runs over **stdio** — compatible with any MCP client.
@@ -112,7 +112,7 @@ from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParamet
 toolset = MCPToolset(
     connection_params=StdioServerParameters(
         command="uv",
-        args=["run", "python", "-m", "app.server"],
+        args=["run", "python", "main.py"],
         cwd="/path/to/Crawl4AI MCP",
     )
 )

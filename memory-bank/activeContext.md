@@ -63,8 +63,9 @@ The server never auto-generates session IDs — full control stays with caller.
 ## Next Steps / Open Items
 1. ~~**Run tests**~~ — All 20 tests pass ✅
 2. ~~**README**~~ — Written ✅
-3. **Run `crawl4ai-setup`** — Install Playwright browsers before first real crawl
-4. **Create `.env`** — Copy `.env.example` and configure Ollama endpoints
-5. **Verify AdaptiveCrawler API** — `max_pages` parameter name may differ in v0.8.6
-6. **ADK integration** — Write/test the Google ADK MCPToolset configuration
+3. ~~**Run `crawl4ai-setup`**~~ — Playwright + Patchright browsers installed ✅
+4. ~~**Create `.env`**~~ — Created with `OLLAMA_EMBED_MODEL=mxbai-embed-large` ✅
+5. ~~**Pull Ollama embed model**~~ — `mxbai-embed-large` pulled (669 MB) ✅
+6. **Verify AdaptiveCrawler API** — `max_pages` parameter name may differ in v0.8.6
+7. **ADK integration** — Write/test the Google ADK MCPToolset configuration
 
