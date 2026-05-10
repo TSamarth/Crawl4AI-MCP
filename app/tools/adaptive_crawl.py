@@ -18,14 +18,10 @@ from fastmcp import Context
 
 from app.config import config
 from app.storage.chroma_store import get_chroma
-from app.storage.chunker import TextChunker
+from app.storage.chunker import chunk_text
 from app.storage.sqlite_store import get_store
 from app.utils import make_id
 
-_chunker = TextChunker(
-    chunk_size=config.CHUNK_SIZE_TOKENS,
-    overlap=config.CHUNK_OVERLAP_TOKENS,
-)
 
 
 async def adaptive_crawl(
@@ -146,7 +142,7 @@ async def adaptive_crawl(
                         pages_with_content += 1
                         aggregated_fit_markdown.append(f"## Source: {url}\n\n{fit_md}")
 
-                        chunks = _chunker.chunk(fit_md, url=url, title=title)
+                        chunks = chunk_text(fit_md)
                         if chunks:
                             chunk_ids = [make_id() for _ in chunks]
                             try:
@@ -162,6 +158,7 @@ async def adaptive_crawl(
                                             "chunk_index": str(c.chunk_index),
                                             "strategy": "adaptive_crawl",
                                             "page_id": page_id,
+                                            "extraction": config.CHUNKING_STRATEGY,
                                         }
                                         for c in chunks
                                     ],

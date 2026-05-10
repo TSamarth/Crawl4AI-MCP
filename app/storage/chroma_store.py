@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 import chromadb
 import tiktoken
 from chromadb import Collection
-from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
+from chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction
 
 from app.config import config
 

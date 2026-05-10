@@ -6,13 +6,16 @@ Both tools apply a two-pass content filter pipeline:
   2. BM25ContentFilter     – query-focused relevance (when query provided)
 
 Results are stored in SQLite + ChromaDB for later semantic search.
+Chunking uses Crawl4AI native strategies (SlidingWindow / Regex / Overlapping).
+LLM extraction can be enabled per-call or via config.LLM_EXTRACTION_ENABLED.
 """
 from __future__ import annotations
 
-# import asyncio
+import json
+import logging
 from typing import Any, Dict, List, Optional
 
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, LLMConfig, LLMExtractionStrategy
 from crawl4ai import MemoryAdaptiveDispatcher
 from crawl4ai.content_filter_strategy import BM25ContentFilter, PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
@@ -20,14 +23,25 @@ from fastmcp import Context
 
 from app.config import config
 from app.storage.chroma_store import get_chroma
-from app.storage.chunker import TextChunker
+from app.storage.chunker import chunk_text, get_crawl4ai_chunker
 from app.storage.sqlite_store import get_store
 from app.utils import get_cache_mode, make_id
 
-_chunker = TextChunker(
-    chunk_size=config.CHUNK_SIZE_TOKENS,
-    overlap=config.CHUNK_OVERLAP_TOKENS,
-)
+logger = logging.getLogger(__name__)
+
+
+def _build_llm_extraction_strategy(query: Optional[str] = None) -> LLMExtractionStrategy:
+    """Build an LLMExtractionStrategy using the configured Ollama LLM."""
+    return LLMExtractionStrategy(
+        llm_config=LLMConfig(provider=config.OLLAMA_LLM_MODEL, api_token=None),
+        extraction_type="block",
+        instruction=f"Extract information only regarding: {query}" if query else "Extract the key content blocks.",
+        chunk_token_threshold=1000,
+        overlap_rate=0.1,
+        apply_chunking=True,
+        input_format="fit_markdown",
+        extra_args={"temperature": 0.0, "max_tokens": 800},
+    )
 
 
 def _build_run_config(
@@ -38,8 +52,13 @@ def _build_run_config(
     take_screenshot: bool = False,
     wait_for: Optional[str] = None,
     js_code: Optional[str] = None,
+    use_llm_extraction: bool = False,
 ) -> CrawlerRunConfig:
-    """Build a CrawlerRunConfig with research-optimised content filtering."""
+    """Build a CrawlerRunConfig with research-optimised content filtering.
+
+    When use_llm_extraction=True, wires LLMExtractionStrategy into the config
+    so Crawl4AI handles chunking+extraction during the crawl itself.
+    """
     tags = excluded_tags or ["nav", "footer", "aside", "header", "script", "style"]
 
     # Two-pass filter: Prune first, then BM25 if query provided
@@ -59,6 +78,9 @@ def _build_run_config(
     else:
         md_generator = DefaultMarkdownGenerator(content_filter=prune_filter)
 
+    # Optional LLM extraction (handles chunking internally)
+    extraction_strategy = _build_llm_extraction_strategy(query) if use_llm_extraction else None
+
     return CrawlerRunConfig(
         markdown_generator=md_generator,
         css_selector=css_selector,
@@ -73,7 +95,57 @@ def _build_run_config(
         wait_for=wait_for,
         js_code=js_code,
         verbose=False,
+        extraction_strategy=extraction_strategy,
     )
+
+
+def _parse_llm_extracted_chunks(extracted_content: str, url: str, title: str, session_id: Optional[str], query: Optional[str], strategy: str, page_id: str) -> tuple[List[str], List[str], List[Dict]]:
+    """Parse result.extracted_content (JSON from LLMExtractionStrategy) into chunk records.
+
+    Returns (chunk_ids, chunk_texts, metadatas) ready for ChromaDB + SQLite.
+    """
+    try:
+        blocks = json.loads(extracted_content)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Could not parse extracted_content as JSON; skipping LLM chunks.")
+        return [], [], []
+
+    if not isinstance(blocks, list):
+        blocks = [blocks]
+
+    chunk_ids: List[str] = []
+    chunk_texts: List[str] = []
+    metadatas: List[Dict] = []
+
+    for i, block in enumerate(blocks):
+        if isinstance(block, dict):
+            # Block extraction: join content list into a single string
+            content_parts = block.get("content", [])
+            if isinstance(content_parts, list):
+                text = "\n".join(str(p) for p in content_parts).strip()
+            else:
+                text = str(content_parts).strip()
+        else:
+            text = str(block).strip()
+
+        if not text:
+            continue
+
+        cid = make_id()
+        chunk_ids.append(cid)
+        chunk_texts.append(text)
+        metadatas.append({
+            "url": url,
+            "title": title,
+            "session_id": session_id or "",
+            "query": query or "",
+            "chunk_index": str(i),
+            "strategy": strategy,
+            "page_id": page_id,
+            "extraction": "llm",
+        })
+
+    return chunk_ids, chunk_texts, metadatas
 
 
 async def _persist_result(
@@ -83,7 +155,12 @@ async def _persist_result(
     query: Optional[str],
     total_score: float = 0.0,
 ) -> str:
-    """Save crawl result to SQLite and ChromaDB. Returns page_id."""
+    """Save crawl result to SQLite and ChromaDB. Returns page_id.
+
+    Chunking priority:
+      1. If result.extracted_content is set → LLM extracted blocks (parsed from JSON).
+      2. Otherwise → Crawl4AI native chunking strategy applied to fit_markdown.
+    """
     page_id = make_id()
     meta = result.metadata or {}
     title = meta.get("title", "") if isinstance(meta, dict) else ""
@@ -124,13 +201,40 @@ async def _persist_result(
     ]
     await store.save_links(page_id, internal_links + external_links)
 
-    # Chunk and store in ChromaDB
-    if fit_md.strip():
-        chunks = _chunker.chunk(fit_md, url=result.url, title=title)
+    # ── Chunk and store in ChromaDB ──────────────────────────────────────────
+    extracted = getattr(result, "extracted_content", None)
+
+    if extracted:
+        # Path 1: LLM extraction — parse blocks from result.extracted_content
+        chunk_ids, chunk_texts_list, metadatas = _parse_llm_extracted_chunks(
+            extracted, result.url, title, session_id, query, strategy, page_id
+        )
+        if chunk_ids:
+            chroma = get_chroma()
+            try:
+                chroma.add_chunks(chunk_ids, chunk_texts_list, metadatas)
+            except Exception:
+                pass
+
+            chunk_records = [
+                {
+                    "id": cid,
+                    "chunk_index": int(m["chunk_index"]),
+                    "chunk_text": text,
+                    "token_count": len(text.split()),
+                    "chroma_doc_id": cid,
+                }
+                for cid, text, m in zip(chunk_ids, chunk_texts_list, metadatas)
+            ]
+            await store.save_chunks(page_id, chunk_records)
+
+    elif fit_md.strip():
+        # Path 2: Native Crawl4AI chunking strategy applied to fit_markdown
+        chunks = chunk_text(fit_md)
         if chunks:
             chroma = get_chroma()
             chunk_ids = [make_id() for _ in chunks]
-            chunk_texts = [c.text for c in chunks]
+            c_texts = [c.text for c in chunks]
             metadatas = [
                 {
                     "url": result.url,
@@ -140,13 +244,14 @@ async def _persist_result(
                     "chunk_index": str(c.chunk_index),
                     "strategy": strategy,
                     "page_id": page_id,
+                    "extraction": config.CHUNKING_STRATEGY,
                 }
                 for c in chunks
             ]
             try:
-                chroma.add_chunks(chunk_ids, chunk_texts, metadatas)
+                chroma.add_chunks(chunk_ids, c_texts, metadatas)
             except Exception:
-                pass  # ChromaDB (Ollama) may be unavailable — don't fail the crawl
+                pass
 
             chunk_records = [
                 {
@@ -209,6 +314,7 @@ async def crawl_url(
     take_screenshot: bool = False,
     wait_for: Optional[str] = None,
     js_code: Optional[str] = None,
+    use_llm_extraction: Optional[bool] = None,
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
     """
@@ -218,7 +324,8 @@ async def crawl_url(
     1. PruningContentFilter removes boilerplate and low-quality blocks.
     2. BM25ContentFilter (when query provided) focuses content on research topic.
 
-    The result is stored in SQLite and ChromaDB for later retrieval.
+    Content is chunked using the configured Crawl4AI chunking strategy
+    (sliding_window by default) and stored in SQLite + ChromaDB.
 
     Args:
         url: Target URL to crawl.
@@ -230,12 +337,16 @@ async def crawl_url(
         take_screenshot: Capture a base64 screenshot of the page.
         wait_for: CSS or JS condition to wait for before extracting.
         js_code: JavaScript to execute after page load.
+        use_llm_extraction: Apply LLM extraction for richer chunks (overrides
+            config.LLM_EXTRACTION_ENABLED when specified).
 
     Returns:
         Dict with success, url, title, raw_markdown, fit_markdown, links, metadata.
     """
     if ctx:
         await ctx.info(f"Crawling: {url}")
+
+    llm_extract = use_llm_extraction if use_llm_extraction is not None else config.LLM_EXTRACTION_ENABLED
 
     browser_cfg = BrowserConfig(headless=True, text_mode=not take_screenshot, light_mode=True)
     run_cfg = _build_run_config(
@@ -246,6 +357,7 @@ async def crawl_url(
         take_screenshot=take_screenshot,
         wait_for=wait_for,
         js_code=js_code,
+        use_llm_extraction=llm_extract,
     )
 
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
@@ -268,6 +380,7 @@ async def crawl_many(
     session_id: Optional[str] = None,
     max_concurrent: int = 5,
     cache_mode: Optional[str] = None,
+    use_llm_extraction: Optional[bool] = None,
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
     """
@@ -275,7 +388,8 @@ async def crawl_many(
 
     Uses MemoryAdaptiveDispatcher to automatically throttle concurrency when
     system memory exceeds 70%, preventing OOM during large research batches.
-    Results are stored incrementally in SQLite + ChromaDB.
+    Results are stored incrementally in SQLite + ChromaDB using the configured
+    Crawl4AI chunking strategy.
 
     Args:
         urls: List of URLs to crawl (typically the qualified_urls from triage).
@@ -283,6 +397,8 @@ async def crawl_many(
         session_id: Research session identifier for grouping results.
         max_concurrent: Maximum concurrent crawl sessions (default 5).
         cache_mode: Override cache behaviour: enabled | bypass | disabled.
+        use_llm_extraction: Apply LLM extraction for richer chunks (overrides
+            config.LLM_EXTRACTION_ENABLED when specified).
 
     Returns:
         Dict with results list, summary stats, and session_id.
@@ -293,10 +409,12 @@ async def crawl_many(
     if ctx:
         await ctx.info(f"Batch crawling {len(urls)} URLs (max_concurrent={max_concurrent})")
 
+    llm_extract = use_llm_extraction if use_llm_extraction is not None else config.LLM_EXTRACTION_ENABLED
+
     effective_concurrent = min(max_concurrent, config.MAX_CONCURRENT_CRAWLS)
 
     browser_cfg = BrowserConfig(headless=True, text_mode=True, light_mode=True)
-    run_cfg = _build_run_config(query=query, cache_mode_str=cache_mode)
+    run_cfg = _build_run_config(query=query, cache_mode_str=cache_mode, use_llm_extraction=llm_extract)
 
     dispatcher = MemoryAdaptiveDispatcher(
         memory_threshold_percent=70.0,
@@ -338,4 +456,3 @@ async def crawl_many(
         },
         "session_id": session_id,
     }
-

@@ -18,7 +18,7 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from fastmcp import Context
 
 from app.config import config
-from app.tools.crawl import _format_result, _persist_result
+from app.tools.crawl import _build_llm_extraction_strategy, _format_result, _persist_result
 from app.utils import get_cache_mode
 
 
@@ -48,6 +48,7 @@ async def deep_crawl(
     stay_on_domain: bool = True,
     score_threshold: float = 0.0,
     cache_mode: Optional[str] = None,
+    use_llm_extraction: Optional[bool] = None,
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
     """
@@ -58,6 +59,7 @@ async def deep_crawl(
     those pages at depth+1, repeating until max_depth or max_pages is reached.
 
     Generates fit_markdown per page and stores results in SQLite + ChromaDB.
+    Content is chunked using the configured Crawl4AI chunking strategy.
 
     Args:
         seed_url: Starting URL for the BFS crawl.
@@ -69,6 +71,8 @@ async def deep_crawl(
         stay_on_domain: If True, only follow links on the same domain (default True).
         score_threshold: Minimum intrinsic_score for a link to be followed (0 = all links).
         cache_mode: Override cache behaviour: enabled | bypass | disabled.
+        use_llm_extraction: Apply LLM extraction for richer chunks (overrides
+            config.LLM_EXTRACTION_ENABLED when specified).
 
     Returns:
         Dict with pages list, aggregated stats, and crawl summary.
@@ -76,7 +80,9 @@ async def deep_crawl(
     if ctx:
         await ctx.info(f"Deep crawl starting at: {seed_url} (max_depth={max_depth}, max_pages={max_pages})")
 
-    # Build run config
+    llm_extract = use_llm_extraction if use_llm_extraction is not None else config.LLM_EXTRACTION_ENABLED
+
+    # Build content filter
     if query:
         content_filter = BM25ContentFilter(
             user_query=query,
@@ -89,6 +95,9 @@ async def deep_crawl(
             min_word_threshold=config.MIN_WORD_THRESHOLD,
         )
 
+    # Optional LLM extraction strategy
+    extraction_strategy = _build_llm_extraction_strategy(query) if llm_extract else None
+
     run_cfg = CrawlerRunConfig(
         markdown_generator=DefaultMarkdownGenerator(content_filter=content_filter),
         excluded_tags=["nav", "footer", "aside", "header", "script", "style"],
@@ -99,6 +108,7 @@ async def deep_crawl(
         cache_mode=get_cache_mode(cache_mode or config.CACHE_MODE),
         page_timeout=config.PAGE_TIMEOUT_MS,
         verbose=False,
+        extraction_strategy=extraction_strategy,
     )
 
     browser_cfg = BrowserConfig(headless=True, text_mode=True, light_mode=True)

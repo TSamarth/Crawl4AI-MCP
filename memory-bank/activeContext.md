@@ -1,41 +1,27 @@
 # Active Context
 
 ## Current Status
-**Phase: Implementation Complete (Phases 1–8)**
-Date: 2026-04-22
+**Phase: Chunking Strategy Upgrade (Phase 9)**
+Date: 2026-05-06
 
 ## What Was Just Built
-Full implementation of the Crawl4AI FastMCP server across all 8 phases:
+Replaced the manual tiktoken-based `TextChunker` with Crawl4AI's native chunking
+strategies and added opt-in LLM extraction across all crawl tools.
 
-### Files Created
+### Changes Made
 ```
-app/
-├── server.py          — FastMCP entry point (stdio transport)
-├── common.py          — DRY tool/resource/prompt registration
-├── config.py          — Environment-based configuration
-├── utils.py           — Shared helpers (make_id, get_cache_mode)
-├── tools/
-│   ├── triage.py      — score_and_triage_urls
-│   ├── crawl.py       — crawl_url, crawl_many
-│   ├── deep_crawl.py  — deep_crawl (BFS)
-│   ├── adaptive_crawl.py — adaptive_crawl (AdaptiveCrawler)
-│   └── search.py      — search_chunks, get_crawl_stats
-├── storage/
-│   ├── sqlite_store.py — SQLite persistence layer
-│   ├── chroma_store.py — ChromaDB vector store
-│   └── chunker.py     — Token-based text chunker
-├── resources/
-│   └── static.py      — crawl4ai://status, crawl4ai://capabilities
-└── prompts/
-    └── research.py    — deep_research_plan prompt
-tests/
-├── conftest.py        — FastMCP Client fixture
-├── test_crawl.py      — crawl_url, crawl_many tests
-├── test_triage.py     — score_and_triage_urls tests
-├── test_deep_crawl.py — deep_crawl BFS tests
-├── test_search.py     — search_chunks, get_crawl_stats tests
-└── test_storage.py    — SQLiteStore, ChromaStore, chunker tests
-memory-bank/           — All 6 memory bank files
+app/config.py       — Added 6 new config fields (CHUNKING_STRATEGY, window/step/overlap
+                      words, REGEX_CHUNKING_PATTERNS, LLM_EXTRACTION_ENABLED)
+app/storage/chunker.py — Added get_crawl4ai_chunker() factory + chunk_text() primary
+                         path; kept TextChunker class as legacy fallback (tests still pass)
+app/tools/crawl.py  — Removed TextChunker instance; import chunk_text; added
+                      _build_llm_extraction_strategy(); dual-path _persist_result
+                      (LLM extracted_content → native chunking fallback); added
+                      use_llm_extraction param to crawl_url + crawl_many
+app/tools/deep_crawl.py — Removed hardcoded LLMExtractionStrategy; import
+                          _build_llm_extraction_strategy; use_llm_extraction param
+app/tools/adaptive_crawl.py — Replaced TextChunker with chunk_text(); added
+                               extraction metadata key
 ```
 
 ## Active Decisions Made
@@ -60,12 +46,24 @@ Only `search_chunks` will return an error if ChromaDB is unavailable.
 The ADK agent passes a `session_id` string to group related crawls.
 The server never auto-generates session IDs — full control stays with caller.
 
-## Next Steps / Open Items
-1. ~~**Run tests**~~ — All 20 tests pass ✅
-2. ~~**README**~~ — Written ✅
-3. ~~**Run `crawl4ai-setup`**~~ — Playwright + Patchright browsers installed ✅
-4. ~~**Create `.env`**~~ — Created with `OLLAMA_EMBED_MODEL=mxbai-embed-large` ✅
-5. ~~**Pull Ollama embed model**~~ — `mxbai-embed-large` pulled (669 MB) ✅
-6. **Verify AdaptiveCrawler API** — `max_pages` parameter name may differ in v0.8.6
-7. **ADK integration** — Write/test the Google ADK MCPToolset configuration
+### 5. Chunking strategy is uniform across all tools
+All 4 crawl tools use `chunk_text()` (Crawl4AI native) for consistency.
+Controlled by `CHUNKING_STRATEGY` env var: `sliding_window` | `regex` | `overlapping`.
+Default: `sliding_window` (window_size=200 words, step=160 words).
 
+### 6. LLM extraction is opt-in
+`use_llm_extraction` param on `crawl_url`, `crawl_many`, `deep_crawl` (default: False,
+or `config.LLM_EXTRACTION_ENABLED` if not specified per call).
+When enabled, `_persist_result` reads from `result.extracted_content` (LLM blocks)
+instead of running the standalone chunking strategy.
+
+### 7. TextChunker kept for backward compatibility
+Legacy `TextChunker` class stays in `chunker.py` so existing tests and any
+external code referencing it continue to work without changes.
+
+## Next Steps / Open Items
+1. ~~**Chunking strategy upgrade**~~ — Implemented ✅ (all 12 tests pass)
+2. **Verify AdaptiveCrawler API** — `max_pages` parameter name may differ in v0.8.6
+3. **ADK integration** — Write/test the Google ADK MCPToolset configuration
+4. **LLM extraction E2E test** — Add a test that mocks `result.extracted_content`
+   and verifies `_persist_result` takes the LLM path correctly

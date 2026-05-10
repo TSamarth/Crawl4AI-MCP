@@ -5,12 +5,13 @@
 - [x] Configuration system (app/config.py) with env var loading
 - [x] SQLite storage (crawl_sessions, crawled_pages, chunks, page_links)
 - [x] ChromaDB store with Ollama embedding function
-- [x] Token-based text chunker (tiktoken cl100k_base)
+- [x] Crawl4AI native chunking strategies (SlidingWindow / Regex / Overlapping)
+- [x] Legacy TextChunker (tiktoken) kept for backward compatibility
 - [x] Tool: score_and_triage_urls (LinkPreviewConfig + BM25 scoring)
-- [x] Tool: crawl_url (single URL, two-pass content filter)
-- [x] Tool: crawl_many (batch, MemoryAdaptiveDispatcher, streaming)
-- [x] Tool: deep_crawl (BFS with depth/page limits, domain/pattern filters)
-- [x] Tool: adaptive_crawl (AdaptiveCrawler.digest() wrapper)
+- [x] Tool: crawl_url (single URL, two-pass content filter, opt-in LLM extraction)
+- [x] Tool: crawl_many (batch, MemoryAdaptiveDispatcher, streaming, opt-in LLM extraction)
+- [x] Tool: deep_crawl (BFS with depth/page limits, domain/pattern filters, opt-in LLM extraction)
+- [x] Tool: adaptive_crawl (AdaptiveCrawler.digest() wrapper, native chunking)
 - [x] Tool: search_chunks (ChromaDB cosine similarity search)
 - [x] Tool: get_crawl_stats (SQLite + ChromaDB metrics)
 - [x] Resource: crawl4ai://status
@@ -18,16 +19,13 @@
 - [x] Prompt: deep_research_plan
 - [x] FastMCP server (stdio transport)
 - [x] common.py DRY registration
-- [x] Test suite (5 test files, conftest with FastMCP Client fixture)
+- [x] Test suite (5 test files, 12 non-network tests passing)
 - [x] Memory bank (all 6 files)
 
 ## What's Left / Known Issues
-- [x] Tests validated — all 20 pass (6 storage, 6 triage+search, 8 crawl+deep_crawl)
 - [ ] AdaptiveCrawler `max_pages` param name needs verification for v0.8.6
-- [x] README written (README.md)
-- [x] crawl4ai-setup run — Playwright + Patchright browsers installed ✅
-- [x] .env file created (OLLAMA_EMBED_MODEL=mxbai-embed-large) ✅
-- [x] mxbai-embed-large pulled via Ollama ✅
+- [ ] ADK integration — Write/test the Google ADK MCPToolset configuration
+- [ ] LLM extraction E2E test — mock `result.extracted_content` and verify dual-path persist
 
 ## Known Decisions / Trade-offs
 1. **Re-crawl in adaptive_crawl:** AdaptiveCrawler doesn't expose per-page results
@@ -36,4 +34,8 @@
    This keeps crawl tools working without Ollama, at cost of missing embeddings.
 3. **No session auto-creation:** Sessions must be explicitly created or the
    session_id is passed as metadata only (no FK violation due to IGNORE).
-
+4. **Chunking is word-based (Crawl4AI native):** SlidingWindowChunking uses word
+   counts, not tokens. word_count is stored as `token_count` proxy in SQLite.
+   ChromaStore still truncates by cl100k tokens before embedding for safety.
+5. **LLM extraction is opt-in per-call:** Per-tool `use_llm_extraction` override
+   takes precedence over `config.LLM_EXTRACTION_ENABLED` global flag.

@@ -21,7 +21,7 @@ FastMCP Server (app/server.py)
     └── Storage (app/storage/)
         ├── sqlite_store.py   → full content, metadata, crawl history
         ├── chroma_store.py   → semantic vector search (Ollama embeddings)
-        └── chunker.py        → token-based sliding window chunking
+        └── chunker.py        → Crawl4AI native chunking strategies + legacy TextChunker
 ```
 
 ## Key Design Patterns
@@ -76,8 +76,11 @@ Web Search Results (URLs)
     → [adaptive_crawl | deep_crawl | crawl_many] per strategy group
     → _persist_result() per page:
         → SQLiteStore.save_page() + save_links() + save_chunks()
-        → TextChunker.chunk(fit_markdown)
-        → ChromaStore.add_chunks(chunks, Ollama embeddings)
+        → if result.extracted_content (LLM):
+            → parse JSON blocks → ChromaStore.add_chunks()
+          else:
+            → chunk_text(fit_markdown) [Crawl4AI native strategy]
+            → ChromaStore.add_chunks(chunks, Ollama embeddings)
     → search_chunks(query) → ChromaDB cosine similarity search
     → Agent synthesizes chunks into research output
 ```
@@ -90,7 +93,8 @@ Web Search Results (URLs)
 
 ## ChromaDB Design
 - Single collection: `research_chunks`
-- Metadata keys: url, title, session_id, query, chunk_index, strategy, page_id
+- Metadata keys: url, title, session_id, query, chunk_index, strategy, page_id, extraction
+- `extraction` value: chunking strategy name (e.g. "sliding_window") or "llm"
 - Embedding: `nomic-embed-text` via Ollama
 - Distance metric: cosine
 

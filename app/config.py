@@ -98,6 +98,35 @@ class Config:
         default_factory=lambda: _env_int("CHUNK_OVERLAP_TOKENS", 40)
     )
 
+    # ── Crawl4AI Native Chunking Strategy ────────────────────────────────────
+    # Strategy: "sliding_window" (default) | "regex" | "overlapping"
+    CHUNKING_STRATEGY: str = field(
+        default_factory=lambda: _env("CHUNKING_STRATEGY", "sliding_window")
+    )
+    # Word-based window size used by sliding_window and overlapping strategies
+    CHUNK_WINDOW_SIZE_WORDS: int = field(
+        default_factory=lambda: _env_int("CHUNK_WINDOW_SIZE_WORDS", 200)
+    )
+    # Step size in words between windows (sliding_window only)
+    CHUNK_STEP_SIZE_WORDS: int = field(
+        default_factory=lambda: _env_int("CHUNK_STEP_SIZE_WORDS", 160)
+    )
+    # Overlap in words between windows (overlapping strategy only)
+    CHUNK_OVERLAP_WORDS: int = field(
+        default_factory=lambda: _env_int("CHUNK_OVERLAP_WORDS", 40)
+    )
+    # Comma-separated regex patterns for RegexChunking (e.g. "\n\n,\n###")
+    REGEX_CHUNKING_PATTERNS: str = field(
+        default_factory=lambda: _env("REGEX_CHUNKING_PATTERNS", r"\n\n")
+    )
+
+    # ── LLM Extraction ───────────────────────────────────────────────────────
+    # When True, LLMExtractionStrategy is applied during crawl to produce
+    # semantically richer chunks stored in ChromaDB.
+    LLM_EXTRACTION_ENABLED: bool = field(
+        default_factory=lambda: _env("LLM_EXTRACTION_ENABLED", "false").lower() == "true"
+    )
+
     def ensure_data_dirs(self) -> None:
         """Create data directories if they don't exist."""
         Path(self.CHROMA_PERSIST_DIR).mkdir(parents=True, exist_ok=True)

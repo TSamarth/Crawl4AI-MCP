@@ -1,28 +1,125 @@
 """
-Token-aware sliding window text chunker.
+Chunking utilities for research content storage.
+
+Provides two approaches:
+  1. TextChunker – legacy token-aware sliding window (kept for backward compat).
+  2. chunk_text() – uses Crawl4AI native chunking strategies (RegexChunking,
+     SlidingWindowChunking, OverlappingWindowChunking) configured via config.
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional, Union
 
 import tiktoken
+from crawl4ai.chunking_strategy import (
+    OverlappingWindowChunking,
+    RegexChunking,
+    SlidingWindowChunking,
+)
+
+from app.config import config
 
 
 @dataclass
 class TextChunk:
     text: str
     chunk_index: int
-    token_count: int
+    token_count: int   # word count used as proxy when using Crawl4AI strategies
     char_start: int
     char_end: int
 
 
+# ---------------------------------------------------------------------------
+# Crawl4AI native chunking (new primary path)
+# ---------------------------------------------------------------------------
+
+def get_crawl4ai_chunker(
+    strategy: Optional[str] = None,
+) -> Union[RegexChunking, SlidingWindowChunking, OverlappingWindowChunking]:
+    """Return a Crawl4AI chunking strategy instance based on config (or override).
+
+    Args:
+        strategy: Override for config.CHUNKING_STRATEGY.
+                  One of "regex" | "sliding_window" | "overlapping".
+    """
+    s = (strategy or config.CHUNKING_STRATEGY).lower()
+
+    if s == "regex":
+        # Split patterns are comma-separated in config
+        patterns = [p.strip() for p in config.REGEX_CHUNKING_PATTERNS.split(",") if p.strip()]
+        return RegexChunking(patterns=patterns or [r"\n\n"])
+
+    if s == "overlapping":
+        return OverlappingWindowChunking(
+            window_size=config.CHUNK_WINDOW_SIZE_WORDS,
+            overlap=config.CHUNK_OVERLAP_WORDS,
+        )
+
+    # Default: sliding_window
+    return SlidingWindowChunking(
+        window_size=config.CHUNK_WINDOW_SIZE_WORDS,
+        step=config.CHUNK_STEP_SIZE_WORDS,
+    )
+
+
+def chunk_text(text: str, strategy: Optional[str] = None) -> List[TextChunk]:
+    """Chunk text using a Crawl4AI native chunking strategy.
+
+    Applies the configured (or explicitly specified) strategy to *text* and
+    returns a list of :class:`TextChunk` objects compatible with the existing
+    storage pipeline.  Word count is used as the ``token_count`` proxy since
+    the Crawl4AI strategies are word-based, not token-based.
+
+    Args:
+        text: Markdown/plain text to chunk (typically fit_markdown).
+        strategy: Optional override for config.CHUNKING_STRATEGY.
+    """
+    if not text or not text.strip():
+        return []
+
+    chunker = get_crawl4ai_chunker(strategy)
+    raw_chunks: List[str] = chunker.chunk(text)
+
+    chunks: List[TextChunk] = []
+    search_start = 0
+
+    for i, chunk_str in enumerate(raw_chunks):
+        if not chunk_str or not chunk_str.strip():
+            continue
+
+        # Locate chunk in original text for approximate char positions
+        pos = text.find(chunk_str, search_start)
+        if pos == -1:
+            pos = search_start  # fallback: mark at current position
+
+        char_start = pos
+        char_end = pos + len(chunk_str)
+        search_start = max(search_start, pos + 1)
+
+        chunks.append(
+            TextChunk(
+                text=chunk_str,
+                chunk_index=i,
+                token_count=len(chunk_str.split()),  # word count proxy
+                char_start=char_start,
+                char_end=char_end,
+            )
+        )
+
+    return chunks
+
+
+# ---------------------------------------------------------------------------
+# Legacy TextChunker (kept for backward compatibility and existing tests)
+# ---------------------------------------------------------------------------
+
 class TextChunker:
     """
-    Splits markdown/text into overlapping token-bounded chunks.
-    Uses cl100k_base encoding (same as GPT-3.5/4, good for estimation).
+    Legacy token-aware sliding window text chunker (tiktoken-based).
+
+    .. deprecated::
+        Prefer :func:`chunk_text` which uses Crawl4AI native strategies.
     """
 
     def __init__(self, chunk_size: int = 512, overlap: int = 50):
@@ -36,21 +133,16 @@ class TextChunker:
     def _tokenize(self, text: str) -> List[int]:
         if self._enc:
             return self._enc.encode(text)
-        # Fallback: ~0.75 tokens per character approximation via words
         words = text.split()
-        # Return fake token ids using word indices
         return list(range(len(words)))
 
     def _decode_tokens(self, tokens: List[int], original_text: str) -> str:
-        """Decode token ids back to text."""
         if self._enc:
             try:
                 return self._enc.decode(tokens)
             except Exception:
                 pass
-        # Fallback: return word-slice
         words = original_text.split()
-        # tokens are word indices in fallback mode
         if not tokens:
             return ""
         start = tokens[0]
@@ -58,10 +150,7 @@ class TextChunker:
         return " ".join(words[start:end])
 
     def chunk(self, text: str, url: str = "", title: str = "") -> List[TextChunk]:
-        """
-        Chunk text into overlapping token windows.
-        Returns list of TextChunk objects.
-        """
+        """Chunk text into overlapping token windows."""
         if not text or not text.strip():
             return []
 
@@ -80,17 +169,16 @@ class TextChunker:
             if not chunk_tokens:
                 break
 
-            chunk_text = self._decode_tokens(chunk_tokens, text)
-            if not chunk_text.strip():
+            chunk_text_str = self._decode_tokens(chunk_tokens, text)
+            if not chunk_text_str.strip():
                 continue
 
-            # Approximate char positions
             char_start = len(self._decode_tokens(tokens[:start], text))
-            char_end = char_start + len(chunk_text)
+            char_end = char_start + len(chunk_text_str)
 
             chunks.append(
                 TextChunk(
-                    text=chunk_text,
+                    text=chunk_text_str,
                     chunk_index=chunk_index,
                     token_count=len(chunk_tokens),
                     char_start=char_start,
