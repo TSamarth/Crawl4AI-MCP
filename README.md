@@ -79,9 +79,13 @@ BM25_THRESHOLD=1.0
 MIN_WORD_THRESHOLD=50
 
 # Chunking
-CHUNK_SIZE_TOKENS=512
-CHUNK_OVERLAP_TOKENS=50
+CHUNKING_STRATEGY=sliding_window   # sliding_window | regex | overlapping
+CHUNK_WINDOW_SIZE_WORDS=200
+CHUNK_OVERLAP_TOKENS=40
+# CHUNK_SIZE_TOKENS is auto-derived (≈304) from the embed-model token budget.
 ```
+
+See the [Configuration Reference](#configuration-reference) for the full list.
 
 ### 4. Pull Ollama models
 
@@ -157,7 +161,7 @@ app/
 ├── storage/
 │   ├── sqlite_store.py — Async SQLite persistence
 │   ├── chroma_store.py — ChromaDB vector store (Ollama embeddings)
-│   └── chunker.py      — Token-based text chunker (tiktoken)
+│   └── chunker.py      — Crawl4AI native chunking (legacy tiktoken chunker kept for compat)
 ├── resources/
 │   └── static.py       — MCP resources
 └── prompts/
@@ -167,7 +171,7 @@ app/
 **Storage schema:**
 - `crawl_sessions` — research session metadata
 - `crawled_pages` — full page content & crawl metadata
-- `page_chunks` — tokenized content chunks with ChromaDB doc IDs
+- `chunks` — content chunks with ChromaDB doc IDs
 - `page_links` — discovered internal/external links per page
 
 ---
@@ -179,6 +183,16 @@ uv run pytest tests/ -v
 ```
 
 All 20 tests run offline (no network required — tools are tested with mocks).
+
+### Linting
+
+```bash
+uv run ruff check .          # lint
+uv run ruff check . --fix    # auto-fix
+```
+
+Both `ruff check` and the test suite run in CI (`.github/workflows/ci.yml`) on
+every push to `master`/`dev` and on pull requests.
 
 ---
 
@@ -197,8 +211,18 @@ All 20 tests run offline (no network required — tools are tested with mocks).
 | `PRUNING_THRESHOLD` | `0.45` | Content pruning aggressiveness |
 | `BM25_THRESHOLD` | `1.0` | BM25 relevance filter cutoff |
 | `MIN_WORD_THRESHOLD` | `50` | Minimum words per content block |
-| `CHUNK_SIZE_TOKENS` | `512` | Chunk size in tokens |
-| `CHUNK_OVERLAP_TOKENS` | `50` | Overlap between chunks |
+| `EMBED_MODEL_MAX_TOKENS` | `512` | Embed model context-window limit (its own tokens) |
+| `EMBED_TOKENIZER_SAFETY_FACTOR` | `0.6` | cl100k→embed-tokenizer headroom factor |
+| `CHUNK_SIZE_TOKENS` | *derived* (`304`) | Pre-embedding truncation cap in cl100k tokens; auto-derived from the two vars above when unset |
+| `CHUNK_OVERLAP_TOKENS` | `40` | *Legacy/unused* — superseded by `CHUNK_OVERLAP_WORDS`; not read by the active chunker |
+| `CHUNKING_STRATEGY` | `sliding_window` | Crawl4AI native strategy: `sliding_window` \| `regex` \| `overlapping` |
+| `CHUNK_WINDOW_SIZE_WORDS` | `200` | Window size in words (sliding_window + overlapping) |
+| `CHUNK_STEP_SIZE_WORDS` | `160` | Step in words between windows (sliding_window) |
+| `CHUNK_OVERLAP_WORDS` | `40` | Overlap in words between windows (overlapping) |
+| `REGEX_CHUNKING_PATTERNS` | `\n\n` | Comma-separated regex split patterns (regex strategy) |
+| `LLM_EXTRACTION_ENABLED` | `false` | Enable LLMExtractionStrategy during crawls |
+
+> **Note:** `CHUNK_SIZE_TOKENS` is derived as `floor(EMBED_MODEL_MAX_TOKENS × EMBED_TOKENIZER_SAFETY_FACTOR / 8) × 8` when not set explicitly. It governs pre-embedding truncation; the primary chunk *sizing* is word-based via the `CHUNKING_STRATEGY` settings.
 
 ---
 

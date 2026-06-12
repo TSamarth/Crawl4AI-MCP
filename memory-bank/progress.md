@@ -19,7 +19,7 @@
 - [x] Prompt: deep_research_plan
 - [x] FastMCP server (stdio transport)
 - [x] common.py DRY registration
-- [x] Test suite (5 test files, 12 non-network tests passing)
+- [x] Test suite (5 test files, 20 offline tests passing)
 - [x] Memory bank (all 6 files)
 
 ## What's Left / Known Issues

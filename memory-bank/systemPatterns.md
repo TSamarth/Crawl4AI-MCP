@@ -47,10 +47,10 @@ Every crawl tool returns a consistent dict:
 }
 ```
 
-### 3. Content Filter Pipeline
-Always applied in this order per crawl:
-1. `PruningContentFilter(threshold=0.45, dynamic)` — removes boilerplate
-2. `BM25ContentFilter(user_query=query)` — only when query provided
+### 3. Content Filter Selection
+One filter is chosen per crawl based on query presence:
+- query given → `BM25ContentFilter(user_query=query)` — query-focused relevance
+- no query    → `PruningContentFilter(threshold=0.45, dynamic)` — boilerplate removal
 
 ### 4. Lazy Storage Singletons
 Both `get_store()` (SQLiteStore) and `get_chroma()` (ChromaStore) are lazy

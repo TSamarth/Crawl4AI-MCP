@@ -1,11 +1,11 @@
 """Tests for storage layer: SQLiteStore, ChromaStore, TextChunker."""
 from __future__ import annotations
 
+import os
+import tempfile
+
 import pytest
 import pytest_asyncio
-import tempfile
-import os
-
 
 # ── TextChunker ─────────────────────────────────────────────────────────────
 

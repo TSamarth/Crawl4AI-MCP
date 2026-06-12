@@ -23,7 +23,6 @@ from app.storage.sqlite_store import get_store
 from app.utils import make_id
 
 
-
 async def adaptive_crawl(
     seed_url: str,
     query: str,
@@ -92,6 +91,7 @@ async def adaptive_crawl(
             from crawl4ai import CrawlerRunConfig
             from crawl4ai.content_filter_strategy import BM25ContentFilter
             from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+
             from app.utils import get_cache_mode
 
             run_cfg = CrawlerRunConfig(

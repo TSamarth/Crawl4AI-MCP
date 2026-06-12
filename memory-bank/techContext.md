@@ -11,7 +11,7 @@
 | Relational DB | SQLite (aiosqlite) | >=0.22 | Full content, metadata, crawl history |
 | Embeddings | Ollama nomic-embed-text | local | Text → vectors for ChromaDB |
 | LLM (optional) | Ollama llama3.2 | local | LLM extraction (LLMExtractionStrategy) |
-| Tokenizer | tiktoken cl100k_base | >=0.12 | Accurate token counting for chunking |
+| Tokenizer | tiktoken cl100k_base | >=0.12 | Pre-embedding truncation + legacy chunker |
 | Transport | stdio | — | MCP communication with Google ADK |
 
 ## Development Setup
@@ -76,8 +76,17 @@ uv run pytest tests/ --cov=app --cov-report=html
 | CACHE_MODE | enabled | Crawl cache behaviour |
 | PRUNING_THRESHOLD | 0.45 | PruningContentFilter threshold |
 | BM25_THRESHOLD | 1.0 | BM25ContentFilter threshold |
-| CHUNK_SIZE_TOKENS | 512 | Chunk size in tokens |
-| CHUNK_OVERLAP_TOKENS | 50 | Chunk overlap in tokens |
+| MIN_WORD_THRESHOLD | 50 | Minimum words per content block |
+| EMBED_MODEL_MAX_TOKENS | 512 | Embed model context-window limit |
+| EMBED_TOKENIZER_SAFETY_FACTOR | 0.6 | cl100k→embed-tokenizer headroom |
+| CHUNK_SIZE_TOKENS | *derived* 304 | Pre-embedding truncation cap (cl100k tokens) |
+| CHUNK_OVERLAP_TOKENS | 40 | Legacy/unused — superseded by CHUNK_OVERLAP_WORDS |
+| CHUNKING_STRATEGY | sliding_window | Native strategy: sliding_window\|regex\|overlapping |
+| CHUNK_WINDOW_SIZE_WORDS | 200 | Window size in words |
+| CHUNK_STEP_SIZE_WORDS | 160 | Step in words (sliding_window) |
+| CHUNK_OVERLAP_WORDS | 40 | Overlap in words (overlapping) |
+| REGEX_CHUNKING_PATTERNS | \n\n | Regex split patterns (regex strategy) |
+| LLM_EXTRACTION_ENABLED | false | Enable LLMExtractionStrategy during crawls |
 
 ## Google ADK Integration
 The MCP server runs as a stdio subprocess launched by the ADK runtime.

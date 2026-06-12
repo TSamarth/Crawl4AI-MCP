@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
-from app.config import config
 from app.common import register_all
+from app.config import config
 
 # Ensure data directories exist on startup
 config.ensure_data_dirs()
@@ -31,5 +31,9 @@ mcp = FastMCP(
 register_all(mcp)
 
 
-# if __name__ == "__main__":
-#     mcp.run(transport="stdio")
+if __name__ == "__main__":
+    # Allows `uv run python -m app.server` as an alternative to `main.py`.
+    try:
+        mcp.run(transport="stdio")
+    except KeyboardInterrupt:
+        pass

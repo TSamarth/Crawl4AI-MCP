@@ -1,5 +1,6 @@
 """MCP Prompt: Deep Research Plan."""
 from __future__ import annotations
+
 from typing import List, Optional
 
 
@@ -79,4 +80,3 @@ def deep_research_plan(
         f"- Chunks from search_chunks include source URL and title for citation\n"
         f"- Pages with total_score > 0.7 are the highest quality sources\n"
     )
-"""MCP Prompt: Deep Research Plan."""

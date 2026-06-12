@@ -380,7 +380,7 @@ async def run_e2e() -> int:
     total_elapsed = time.perf_counter() - t_total
     header("Summary")
     if failures == 0:
-        print(f"  {_c(BOLD + GREEN, f'ALL STEPS PASSED')}  ({total_elapsed:.1f}s total)")
+        print(f"  {_c(BOLD + GREEN, 'ALL STEPS PASSED')}  ({total_elapsed:.1f}s total)")
     else:
         print(
             f"  {_c(BOLD + RED, f'{failures} STEP(S) FAILED')}  "

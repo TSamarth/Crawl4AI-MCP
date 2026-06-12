@@ -8,8 +8,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
-from crawl4ai import LinkPreviewConfig
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, LinkPreviewConfig
 from fastmcp import Context
 
 from app.config import config

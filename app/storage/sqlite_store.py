@@ -13,7 +13,6 @@ import aiosqlite
 
 from app.config import config
 
-
 CREATE_TABLES_SQL = """
 PRAGMA journal_mode=WAL;
 

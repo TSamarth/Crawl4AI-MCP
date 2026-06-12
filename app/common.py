@@ -6,13 +6,13 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
+from app.prompts.research import deep_research_plan
+from app.resources.static import get_capabilities, get_status
 from app.tools.adaptive_crawl import adaptive_crawl
 from app.tools.crawl import crawl_many, crawl_url
 from app.tools.deep_crawl import deep_crawl
 from app.tools.search import get_crawl_stats, search_chunks
 from app.tools.triage import score_and_triage_urls
-from app.resources.static import get_capabilities, get_status
-from app.prompts.research import deep_research_plan
 
 
 def register_all(mcp: FastMCP) -> None:

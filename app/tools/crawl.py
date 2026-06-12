@@ -1,9 +1,10 @@
 """
 Core crawling tools: crawl_url and crawl_many.
 
-Both tools apply a two-pass content filter pipeline:
-  1. PruningContentFilter  – removes boilerplate (always)
-  2. BM25ContentFilter     – query-focused relevance (when query provided)
+Both tools select a content filter based on whether a query is given:
+  - query provided → BM25ContentFilter (query-focused relevance)
+  - no query       → PruningContentFilter (boilerplate removal)
+Only the markdown produced by the selected filter becomes fit_markdown.
 
 Results are stored in SQLite + ChromaDB for later semantic search.
 Chunking uses Crawl4AI native strategies (SlidingWindow / Regex / Overlapping).
@@ -15,15 +16,21 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, LLMConfig, LLMExtractionStrategy
-from crawl4ai import MemoryAdaptiveDispatcher
+from crawl4ai import (
+    AsyncWebCrawler,
+    BrowserConfig,
+    CrawlerRunConfig,
+    LLMConfig,
+    LLMExtractionStrategy,
+    MemoryAdaptiveDispatcher,
+)
 from crawl4ai.content_filter_strategy import BM25ContentFilter, PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from fastmcp import Context
 
 from app.config import config
 from app.storage.chroma_store import get_chroma
-from app.storage.chunker import chunk_text, get_crawl4ai_chunker
+from app.storage.chunker import chunk_text
 from app.storage.sqlite_store import get_store
 from app.utils import get_cache_mode, make_id
 
@@ -61,22 +68,21 @@ def _build_run_config(
     """
     tags = excluded_tags or ["nav", "footer", "aside", "header", "script", "style"]
 
-    # Two-pass filter: Prune first, then BM25 if query provided
-    prune_filter = PruningContentFilter(
-        threshold=config.PRUNING_THRESHOLD,
-        threshold_type="dynamic",
-        min_word_threshold=config.MIN_WORD_THRESHOLD,
-    )
-
+    # Pick the filter by query presence: BM25 (query-focused) when a query is
+    # given, otherwise Pruning (boilerplate removal).
     if query:
-        bm25_filter = BM25ContentFilter(
+        content_filter = BM25ContentFilter(
             user_query=query,
             bm25_threshold=config.BM25_THRESHOLD,
             language="english",
         )
-        md_generator = DefaultMarkdownGenerator(content_filter=bm25_filter)
     else:
-        md_generator = DefaultMarkdownGenerator(content_filter=prune_filter)
+        content_filter = PruningContentFilter(
+            threshold=config.PRUNING_THRESHOLD,
+            threshold_type="dynamic",
+            min_word_threshold=config.MIN_WORD_THRESHOLD,
+        )
+    md_generator = DefaultMarkdownGenerator(content_filter=content_filter)
 
     # Optional LLM extraction (handles chunking internally)
     extraction_strategy = _build_llm_extraction_strategy(query) if use_llm_extraction else None
@@ -320,9 +326,9 @@ async def crawl_url(
     """
     Crawl a single URL and extract high-quality research content.
 
-    Applies a two-pass content filter:
-    1. PruningContentFilter removes boilerplate and low-quality blocks.
-    2. BM25ContentFilter (when query provided) focuses content on research topic.
+    Selects a content filter based on the query:
+    - query provided → BM25ContentFilter focuses content on the research topic.
+    - no query       → PruningContentFilter removes boilerplate/low-quality blocks.
 
     Content is chunked using the configured Crawl4AI chunking strategy
     (sliding_window by default) and stored in SQLite + ChromaDB.

@@ -18,6 +18,7 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
     "pytest-mock>=3.15.1",
+    "ruff>=0.9.0",
 ]
 
 [tool.pytest.ini_options]
@@ -29,4 +30,22 @@ python_functions = ["test_*"]
 [tool.coverage.run]
 source = ["app"]
 omit = ["tests/*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+# Vendored skill/example content — not part of this project's source.
+extend-exclude = [".claude", "memory-bank"]
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: isort, B: bugbear
+# (UP/pyupgrade intentionally omitted — the codebase uses Optional/List/Dict typing.)
+select = ["E", "W", "F", "I", "B"]
+# E501 (line length) is noisy for long URLs/instructions; B905 would change zip() semantics.
+ignore = ["E501", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests/e2e may shadow fixtures, import for side effects, or leave call results unused.
+"tests/*" = ["F811", "F401", "F841"]
+"e2e_test.py" = ["F401", "F841"]
 

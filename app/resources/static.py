@@ -4,7 +4,6 @@ Static MCP resources: server status and capabilities.
 from __future__ import annotations
 
 import importlib.metadata
-from typing import Any, Dict
 
 import httpx
 
@@ -47,23 +46,23 @@ async def get_status() -> str:
         chroma_count = -1
 
     lines = [
-        f"# Crawl4AI Research MCP Server",
-        f"",
+        "# Crawl4AI Research MCP Server",
+        "",
         f"**Version:** {config.SERVER_VERSION}",
         f"**Crawl4AI:** {c4ai_version}",
-        f"",
-        f"## Connectivity",
+        "",
+        "## Connectivity",
         f"- Ollama ({config.OLLAMA_BASE_URL}): {'✅ reachable' if ollama_ok else '❌ unreachable'}",
         f"- Embed model: {config.OLLAMA_EMBED_MODEL}",
         f"- LLM model: {config.OLLAMA_LLM_MODEL}",
-        f"",
-        f"## Storage",
+        "",
+        "## Storage",
         f"- Sessions: {stats.get('sessions', 0)}",
         f"- Pages crawled: {stats.get('pages_crawled', 0)}",
         f"- Chunks (SQLite): {stats.get('chunks_stored', 0)}",
         f"- Chunks (ChromaDB): {chroma_count if chroma_count >= 0 else 'unavailable'}",
-        f"",
-        f"## Config",
+        "",
+        "## Config",
         f"- Max concurrent crawls: {config.MAX_CONCURRENT_CRAWLS}",
         f"- Page timeout: {config.PAGE_TIMEOUT_MS}ms",
         f"- Cache mode: {config.CACHE_MODE}",
@@ -85,8 +84,9 @@ with BM25 contextual scoring to identify high-value research sources and
 recommend the optimal crawl strategy for each.
 
 ### 2. `crawl_url`
-Crawl a single URL with two-pass quality filtering (Pruning → BM25).
-Returns raw_markdown and fit_markdown. Stores result in SQLite + ChromaDB.
+Crawl a single URL with query-aware content filtering (BM25 when a query is
+given, else Pruning). Returns raw_markdown and fit_markdown. Stores result in
+SQLite + ChromaDB.
 
 ### 3. `crawl_many`
 Crawl multiple URLs concurrently with MemoryAdaptiveDispatcher.

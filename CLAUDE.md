@@ -1,0 +1,48 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+A FastMCP (stdio) server that exposes Crawl4AI web crawling + ChromaDB semantic search as MCP tools, built for agentic deep-research workflows driven by the Google ADK. Python 3.11+, managed with `uv`.
+
+## Commands
+
+```bash
+uv sync                          # install deps (incl. dev group)
+uv run crawl4ai-setup            # install Playwright browsers (one-time)
+uv run python main.py            # run the MCP server over stdio
+uv run pytest tests/ -v          # full suite (offline — crawls are mocked)
+uv run pytest tests/test_crawl.py::test_name -v   # single test
+uv run python e2e_test.py        # end-to-end test (hits the network + Ollama)
+```
+
+External runtime deps: **Ollama** must be running (`nomic-embed-text` for embeddings, `llama3.2` for optional LLM extraction). Pull with `ollama pull nomic-embed-text`.
+
+## Architecture
+
+**Entry flow:** `main.py` → imports `mcp` from `app/server.py` → `app/server.py` builds the `FastMCP` instance and calls `register_all(mcp)` from `app/common.py`. `common.py` is the single registration point — **add every new tool/resource/prompt there**, not via decorators scattered across modules. Tool functions in `app/tools/` are plain async functions registered with `mcp.tool()` in `common.py`.
+
+**The intended research pipeline** (tools are designed to be chained in this order):
+1. `score_and_triage_urls` — BM25 + link-preview scoring to rank candidate URLs and recommend a crawl strategy.
+2. one of `adaptive_crawl` / `deep_crawl` / `crawl_many` / `crawl_url` — actually fetch + filter content.
+3. `search_chunks` — semantic retrieval over everything stored so far.
+4. `get_crawl_stats` — storage health.
+
+**Content filtering (the core value-add of the crawl tools):** `_build_run_config` (`app/tools/crawl.py`) selects a single content filter by query presence — `BM25ContentFilter` when a `query` is given (focuses on the topic), otherwise `PruningContentFilter` (strips boilerplate). `deep_crawl` and `adaptive_crawl` make the same choice independently. Only `fit_markdown` (the filtered output) is chunked and embedded; `raw_markdown` is also persisted for reference.
+
+**Storage layer (`app/storage/`)** — accessed only through lazy singletons, never instantiated directly:
+- `get_store()` (async) → `SQLiteStore` over aiosqlite. Tables: `crawl_sessions`, `crawled_pages`, `page_links`, `chunks`. Schema lives in `CREATE_TABLES_SQL` in `sqlite_store.py`.
+- `get_chroma()` → `ChromaStore`, a ChromaDB persistent client using Ollama embeddings (cosine space, collection `research_chunks`). Each SQLite chunk stores its `chroma_doc_id` to link the two stores.
+
+**Chunking** (`app/storage/chunker.py`): the primary path is `chunk_text()`, which delegates to **Crawl4AI native word-based strategies** (`sliding_window` default, or `regex` / `overlapping`) selected by `config.CHUNKING_STRATEGY`. `token_count` is a word-count proxy here. The `TextChunker` class is a deprecated tiktoken sliding-window kept only for backward-compat/tests — don't build on it.
+
+**Two chunking origins in `_persist_result`** (`crawl.py`): if `result.extracted_content` is set (LLM extraction was enabled), chunks come from parsing that JSON via `_parse_llm_extracted_chunks`; otherwise `fit_markdown` is chunked with the native strategy. LLM extraction is opt-in via `config.LLM_EXTRACTION_ENABLED` or a per-call `use_llm_extraction` arg.
+
+## Configuration
+
+All config is a single `config` singleton in `app/config.py` (a frozen-ish `@dataclass` loaded from env / `.env`). Add new settings there as `field(default_factory=...)` using the `_env` / `_env_int` / `_env_float` helpers. Note `CHUNK_SIZE_TOKENS` is *derived* from `EMBED_MODEL_MAX_TOKENS × EMBED_TOKENIZER_SAFETY_FACTOR` when not set explicitly — the safety factor exists because tiktoken under-counts vs. the BERT-style embedding tokenizer. See README's Configuration Reference table for the full variable list.
+
+## Testing conventions
+
+Tests use FastMCP's in-memory `Client(mcp)` fixture (`tests/conftest.py`) to call tools as a real MCP client would, with `crawl4ai` mocked so the suite runs fully offline. `asyncio_mode = "auto"` is set, so `async def test_*` works without explicit markers. When adding a tool, register it in `common.py` and test it through the `client` fixture.

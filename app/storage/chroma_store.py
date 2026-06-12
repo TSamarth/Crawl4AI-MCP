@@ -29,8 +29,8 @@ class ChromaStore:
             model_name=config.OLLAMA_EMBED_MODEL,
         )
         self._collection: Optional[Collection] = None
-        # Same tokenizer as TextChunker — used for token-accurate truncation in
-        # _safe_truncate so chunk boundaries are always consistent.
+        # cl100k_base tokenizer — used for token-accurate truncation in
+        # _safe_truncate so chunks never exceed the embed model's context window.
         try:
             self._enc = tiktoken.get_encoding("cl100k_base")
         except Exception:
@@ -53,15 +53,15 @@ class ChromaStore:
 
         Why token-based (not character-based):
           Character estimates fail for URL-dense or minified-code content where
-          mxbai's RoBERTa tokenizer produces 1.5–1.8× more tokens than cl100k
+          BERT-style embed tokenizers produce 1.5–1.8× more tokens than cl100k
           for the same characters.  By capping at CHUNK_SIZE_TOKENS cl100k
-          tokens (which already includes a 0.6× safety factor against the
-          512-token embed-model window), we stay within the model's limit even
-          for worst-case inputs like ``https://docs.python.org/...`` links and
-          space-stripped code blocks.
+          tokens (which already includes the EMBED_TOKENIZER_SAFETY_FACTOR
+          against the EMBED_MODEL_MAX_TOKENS window), we stay within the model's
+          limit even for worst-case inputs like ``https://docs.python.org/...``
+          links and space-stripped code blocks.
 
           CHUNK_SIZE_TOKENS (default 304) ≈ 60 % of 512
-          Worst-case mxbai/cl100k ratio observed:  ~1.7×
+          Worst-case embed/cl100k ratio observed:  ~1.7×
           304 × 1.7 ≈ 517  →  marginal; kept below 512 in practice because
           normal prose in the same chunk lowers the average ratio.
         """

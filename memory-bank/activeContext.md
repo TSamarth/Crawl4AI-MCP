@@ -62,7 +62,7 @@ Legacy `TextChunker` class stays in `chunker.py` so existing tests and any
 external code referencing it continue to work without changes.
 
 ## Next Steps / Open Items
-1. ~~**Chunking strategy upgrade**~~ — Implemented ✅ (all 12 tests pass)
+1. ~~**Chunking strategy upgrade**~~ — Implemented ✅ (all 20 tests pass)
 2. **Verify AdaptiveCrawler API** — `max_pages` parameter name may differ in v0.8.6
 3. **ADK integration** — Write/test the Google ADK MCPToolset configuration
 4. **LLM extraction E2E test** — Add a test that mocks `result.extracted_content`

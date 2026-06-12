@@ -18,7 +18,7 @@ def _mock_crawl_result(url: str, success: bool = True) -> MagicMock:
 
     md = MagicMock()
     md.raw_markdown = f"# Content of {url}\n\nSome research content."
-    md.fit_markdown = f"Some research content."
+    md.fit_markdown = "Some research content."
     result.markdown = md
     return result
 

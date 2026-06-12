@@ -3,13 +3,13 @@ Search and stats tools for stored research content.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastmcp import Context
 
+from app.config import config
 from app.storage.chroma_store import get_chroma
 from app.storage.sqlite_store import get_store
-from app.config import config
 
 
 async def search_chunks(
@@ -21,9 +21,9 @@ async def search_chunks(
     """
     Semantic search over stored research content chunks.
 
-    Uses ChromaDB with Ollama embeddings (nomic-embed-text) to find the
-    most relevant content chunks matching the query. Optionally filter
-    results to a specific research session.
+    Uses ChromaDB with Ollama embeddings (the configured OLLAMA_EMBED_MODEL)
+    to find the most relevant content chunks matching the query. Optionally
+    filter results to a specific research session.
 
     Args:
         query: Search query to find relevant chunks.
