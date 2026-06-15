@@ -11,6 +11,7 @@ from app.resources.static import get_capabilities, get_status
 from app.tools.adaptive_crawl import adaptive_crawl
 from app.tools.crawl import crawl_many, crawl_url
 from app.tools.deep_crawl import deep_crawl
+from app.tools.discover import discover_urls
 from app.tools.search import get_crawl_stats, search_chunks
 from app.tools.triage import score_and_triage_urls
 
@@ -19,6 +20,7 @@ def register_all(mcp: FastMCP) -> None:
     """Register all tools, resources, and prompts with the FastMCP server."""
 
     # ── Tools ────────────────────────────────────────────────────────────────
+    mcp.tool()(discover_urls)
     mcp.tool()(score_and_triage_urls)
     mcp.tool()(crawl_url)
     mcp.tool()(crawl_many)

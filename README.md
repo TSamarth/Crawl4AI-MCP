@@ -117,7 +117,7 @@ toolset = MCPToolset(
     connection_params=StdioServerParameters(
         command="uv",
         args=["run", "python", "main.py"],
-        cwd="/path/to/Crawl4AI MCP",
+        cwd="/path/to/Crawl4AI_MCP",
     )
 )
 ```

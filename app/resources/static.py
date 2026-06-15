@@ -78,34 +78,41 @@ def get_capabilities() -> str:
 
 ## Tools
 
-### 1. `score_and_triage_urls`
+### 1. `discover_urls`
+Turn a research query into candidate URLs. Fans out concurrently to multiple
+search sources (DuckDuckGo, arXiv, Semantic Scholar, and optionally SerpAPI /
+Crawl4AI Google SERP), then merges and de-duplicates the results. This is the
+FIRST step — always follow it with `score_and_triage_urls` (or pass
+`triage=True`) before crawling.
+
+### 2. `score_and_triage_urls`
 Score and rank a list of URLs before crawling. Uses Crawl4AI's LinkPreviewConfig
 with BM25 contextual scoring to identify high-value research sources and
 recommend the optimal crawl strategy for each.
 
-### 2. `crawl_url`
+### 3. `crawl_url`
 Crawl a single URL with query-aware content filtering (BM25 when a query is
 given, else Pruning). Returns raw_markdown and fit_markdown. Stores result in
 SQLite + ChromaDB.
 
-### 3. `crawl_many`
+### 4. `crawl_many`
 Crawl multiple URLs concurrently with MemoryAdaptiveDispatcher.
 Accepts the qualified_urls list from triage. Stores all results incrementally.
 
-### 4. `deep_crawl`
+### 5. `deep_crawl`
 BFS link-following from a seed URL. Explores up to max_depth levels and
 max_pages total. Best for documentation sites and blog archives.
 
-### 5. `adaptive_crawl`
+### 6. `adaptive_crawl`
 Confidence-based exploration using AdaptiveCrawler. Automatically follows
 the most relevant links until target confidence is reached. Best for
 open-ended research with unknown content distribution.
 
-### 6. `search_chunks`
+### 7. `search_chunks`
 Semantic search over stored research chunks via ChromaDB + Ollama embeddings.
 Call this to retrieve relevant context for synthesis after crawling.
 
-### 7. `get_crawl_stats`
+### 8. `get_crawl_stats`
 Returns SQLite and ChromaDB storage statistics: sessions, pages, chunks,
 top-scoring pages by quality score.
 
@@ -114,12 +121,14 @@ top-scoring pages by quality score.
 - `crawl4ai://capabilities` — This document
 
 ## Recommended Workflow
-1. `score_and_triage_urls` → get qualified URLs + strategy recommendations
-2. For each strategy group:
+1. `discover_urls` → gather candidate URLs from search sources for the query
+2. `score_and_triage_urls` → get qualified URLs + strategy recommendations
+   (or call `discover_urls` with `triage=True` to do steps 1–2 in one call)
+3. For each strategy group:
    - `adaptive_crawl` for doc sites (score ≥ 0.75)
    - `deep_crawl` for blog/wiki archives (score ≥ 0.55)
    - `crawl_many` for batches of individual pages
-3. `search_chunks` to retrieve relevant content for synthesis
-4. `get_crawl_stats` to verify coverage
+4. `search_chunks` to retrieve relevant content for synthesis
+5. `get_crawl_stats` to verify coverage
 """
 

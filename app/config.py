@@ -120,6 +120,30 @@ class Config:
         default_factory=lambda: _env("REGEX_CHUNKING_PATTERNS", r"\n\n")
     )
 
+    # ── Discovery / Search ───────────────────────────────────────────────────
+    # Comma-separated default sources for discover_urls when none are passed.
+    # Available: duckduckgo | arxiv | semantic_scholar | serpapi | google_serp
+    DISCOVER_DEFAULT_SOURCES: str = field(
+        default_factory=lambda: _env("DISCOVER_DEFAULT_SOURCES", "duckduckgo,arxiv,semantic_scholar")
+    )
+    DISCOVER_MAX_RESULTS_PER_SOURCE: int = field(
+        default_factory=lambda: _env_int("DISCOVER_MAX_RESULTS_PER_SOURCE", 10)
+    )
+    DISCOVER_MAX_TOTAL: int = field(
+        default_factory=lambda: _env_int("DISCOVER_MAX_TOTAL", 50)
+    )
+    # SerpAPI (serpapi.com) — source is skipped entirely when key is empty.
+    SERPAPI_KEY: str = field(default_factory=lambda: _env("SERPAPI_KEY", ""))
+    # Semantic Scholar — optional key raises rate limits; not required.
+    SEMANTIC_SCHOLAR_API_KEY: str = field(
+        default_factory=lambda: _env("SEMANTIC_SCHOLAR_API_KEY", "")
+    )
+    # Crawl4AI native Google SERP scraping — opt-in (browser + one-time LLM
+    # schema generation, fragile and rate-limited).
+    GOOGLE_SERP_ENABLED: bool = field(
+        default_factory=lambda: _env("GOOGLE_SERP_ENABLED", "false").lower() == "true"
+    )
+
     # ── LLM Extraction ───────────────────────────────────────────────────────
     # When True, LLMExtractionStrategy is applied during crawl to produce
     # semantically richer chunks stored in ChromaDB.
