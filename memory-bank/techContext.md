@@ -87,6 +87,12 @@ uv run pytest tests/ --cov=app --cov-report=html
 | CHUNK_OVERLAP_WORDS | 40 | Overlap in words (overlapping) |
 | REGEX_CHUNKING_PATTERNS | \n\n | Regex split patterns (regex strategy) |
 | LLM_EXTRACTION_ENABLED | false | Enable LLMExtractionStrategy during crawls |
+| DISCOVER_DEFAULT_SOURCES | duckduckgo,arxiv,semantic_scholar | Comma-sep sources for discover_urls |
+| DISCOVER_MAX_RESULTS_PER_SOURCE | 10 | Per-source result cap |
+| DISCOVER_MAX_TOTAL | 50 | Total URL cap after de-dup |
+| SERPAPI_KEY | (empty) | SerpAPI key; source skipped when empty |
+| SEMANTIC_SCHOLAR_API_KEY | (empty) | Optional; raises rate limits |
+| GOOGLE_SERP_ENABLED | false | Opt-in Crawl4AI native Google SERP scraping |
 
 ## Google ADK Integration
 The MCP server runs as a stdio subprocess launched by the ADK runtime.

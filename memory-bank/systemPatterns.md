@@ -9,6 +9,7 @@ Google ADK Agent
 FastMCP Server (app/server.py)
     │ register_all() from app/common.py
     ├── Tools (app/tools/)
+    │   ├── discover.py       → discover_urls (multi-source URL discovery)
     │   ├── triage.py         → score_and_triage_urls
     │   ├── crawl.py          → crawl_url, crawl_many
     │   ├── deep_crawl.py     → deep_crawl (BFS)
@@ -71,7 +72,8 @@ else → skip
 
 ## Data Flow: Full Research Pipeline
 ```
-Web Search Results (URLs)
+discover_urls(query) — fans out to DuckDuckGo/arXiv/SemanticScholar/SerpAPI/GoogleSERP
+    → de-duplicated URL list (canonical, with also_in cross-source tracking)
     → score_and_triage_urls (score + strategy assignment)
     → [adaptive_crawl | deep_crawl | crawl_many] per strategy group
     → _persist_result() per page:

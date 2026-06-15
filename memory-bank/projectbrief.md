@@ -24,8 +24,8 @@ A locally-hosted MCP (Model Context Protocol) server that exposes Crawl4AI's web
 - **Package Manager:** uv
 
 ## Success Criteria
-- All 7 MCP tools functional and tested
-- Content pipeline: crawl → chunk → embed → store → search
+- All 8 MCP tools functional and tested
+- Full pipeline: discover → triage → crawl → chunk → embed → store → search
 - ADK agent can execute a full research workflow via MCP tool calls
 - ChromaDB + SQLite hybrid storage persists across sessions
 

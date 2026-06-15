@@ -7,6 +7,7 @@
 - [x] ChromaDB store with Ollama embedding function
 - [x] Crawl4AI native chunking strategies (SlidingWindow / Regex / Overlapping)
 - [x] Legacy TextChunker (tiktoken) kept for backward compatibility
+- [x] Tool: discover_urls (multi-source: DuckDuckGo/arXiv/SemanticScholar/SerpAPI/GoogleSERP, de-dup, opt-in triage)
 - [x] Tool: score_and_triage_urls (LinkPreviewConfig + BM25 scoring)
 - [x] Tool: crawl_url (single URL, two-pass content filter, opt-in LLM extraction)
 - [x] Tool: crawl_many (batch, MemoryAdaptiveDispatcher, streaming, opt-in LLM extraction)
@@ -19,7 +20,7 @@
 - [x] Prompt: deep_research_plan
 - [x] FastMCP server (stdio transport)
 - [x] common.py DRY registration
-- [x] Test suite (5 test files, 20 offline tests passing)
+- [x] Test suite (6 test files; test_discover.py added for discover_urls)
 - [x] Memory bank (all 6 files)
 
 ## What's Left / Known Issues

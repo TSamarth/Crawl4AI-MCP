@@ -1,28 +1,31 @@
 # Active Context
 
 ## Current Status
-**Phase: Chunking Strategy Upgrade (Phase 9)**
-Date: 2026-05-06
+**Phase: Multi-Source URL Discovery (Phase 10)**
+Date: 2026-06-15
 
 ## What Was Just Built
-Replaced the manual tiktoken-based `TextChunker` with Crawl4AI's native chunking
-strategies and added opt-in LLM extraction across all crawl tools.
+Added `discover_urls` tool (`app/tools/discover.py`) — the new front of the research
+pipeline. Fans out a free-text query to multiple search sources concurrently,
+de-duplicates URLs by canonical form, and optionally chains into `score_and_triage_urls`.
 
-### Changes Made
+### Changes Made (commit 9f86d10)
 ```
-app/config.py       — Added 6 new config fields (CHUNKING_STRATEGY, window/step/overlap
-                      words, REGEX_CHUNKING_PATTERNS, LLM_EXTRACTION_ENABLED)
-app/storage/chunker.py — Added get_crawl4ai_chunker() factory + chunk_text() primary
-                         path; kept TextChunker class as legacy fallback (tests still pass)
-app/tools/crawl.py  — Removed TextChunker instance; import chunk_text; added
-                      _build_llm_extraction_strategy(); dual-path _persist_result
-                      (LLM extracted_content → native chunking fallback); added
-                      use_llm_extraction param to crawl_url + crawl_many
-app/tools/deep_crawl.py — Removed hardcoded LLMExtractionStrategy; import
-                          _build_llm_extraction_strategy; use_llm_extraction param
-app/tools/adaptive_crawl.py — Replaced TextChunker with chunk_text(); added
-                               extraction metadata key
+app/tools/discover.py  — New tool: discover_urls; 5 source adapters (duckduckgo,
+                          arxiv, semantic_scholar, serpapi, google_serp);
+                          URL canonicalization + cross-source also_in tracking;
+                          triage=True passthrough shortcut
+app/config.py          — 6 new fields: DISCOVER_DEFAULT_SOURCES,
+                          DISCOVER_MAX_RESULTS_PER_SOURCE, DISCOVER_MAX_TOTAL,
+                          SERPAPI_KEY, SEMANTIC_SCHOLAR_API_KEY, GOOGLE_SERP_ENABLED
+app/common.py          — Registered discover_urls (now 8 tools total)
+tests/test_discover.py — 7 tests covering de-dup, partial failure, triage passthrough,
+                          key-gated source skipping
 ```
+
+## Previous Phase (Phase 9 — still complete)
+Replaced tiktoken TextChunker with Crawl4AI native chunking strategies + opt-in
+LLM extraction. All changes documented in git history (commit 88c1d0b).
 
 ## Active Decisions Made
 
@@ -62,8 +65,9 @@ Legacy `TextChunker` class stays in `chunker.py` so existing tests and any
 external code referencing it continue to work without changes.
 
 ## Next Steps / Open Items
-1. ~~**Chunking strategy upgrade**~~ — Implemented ✅ (all 20 tests pass)
-2. **Verify AdaptiveCrawler API** — `max_pages` parameter name may differ in v0.8.6
-3. **ADK integration** — Write/test the Google ADK MCPToolset configuration
-4. **LLM extraction E2E test** — Add a test that mocks `result.extracted_content`
+1. ~~**Chunking strategy upgrade**~~ — Implemented ✅
+2. ~~**Multi-source URL discovery**~~ — Implemented ✅ (discover_urls, 7 tests)
+3. **Verify AdaptiveCrawler API** — `max_pages` parameter name may differ in v0.8.6
+4. **ADK integration** — Write/test the Google ADK MCPToolset configuration
+5. **LLM extraction E2E test** — Add a test that mocks `result.extracted_content`
    and verifies `_persist_result` takes the LLM path correctly

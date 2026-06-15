@@ -28,8 +28,10 @@ beyond simple single-page fetching. Research agents need to:
 
 ## How It Works (User Flow)
 1. Research Agent creates a research plan and generates search queries
-2. Web search tools (SerpAPI/DuckDuckGo) return a de-duplicated URL list
-3. Discovery Agent calls `score_and_triage_urls` to rank and strategize
+2. Agent calls `discover_urls` to fan out across DuckDuckGo, arXiv, Semantic Scholar,
+   SerpAPI, and/or Google SERP — returns a de-duplicated URL list with source metadata
+3. Agent calls `score_and_triage_urls` (or passes `triage=True` to discover_urls)
+   to rank URLs and assign crawl strategies
 4. Based on strategy recommendations, the agent calls:
    - `adaptive_crawl` for documentation/wiki sites
    - `deep_crawl` for blog archives and structured content trees
