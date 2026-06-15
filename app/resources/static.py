@@ -92,8 +92,8 @@ recommend the optimal crawl strategy for each.
 
 ### 3. `crawl_url`
 Crawl a single URL with query-aware content filtering (BM25 when a query is
-given, else Pruning). Returns raw_markdown and fit_markdown. Stores result in
-SQLite + ChromaDB.
+given, else Pruning). Returns a short content preview + `page_id`; full content
+is stored in SQLite + ChromaDB — retrieve it via `search_chunks`.
 
 ### 4. `crawl_many`
 Crawl multiple URLs concurrently with MemoryAdaptiveDispatcher.

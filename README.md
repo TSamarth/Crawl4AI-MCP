@@ -108,19 +108,47 @@ The server runs over **stdio** — compatible with any MCP client.
 
 ## Google ADK Integration
 
-Add to your ADK agent config:
+Wire the server into your ADK agent over stdio. Current `google-adk` wraps the
+stdio params in `StdioConnectionParams`:
 
 ```python
-from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters
+from google.adk.agents import LlmAgent
+from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
+from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
+from mcp import StdioServerParameters
 
 toolset = MCPToolset(
-    connection_params=StdioServerParameters(
-        command="uv",
-        args=["run", "python", "main.py"],
-        cwd="/path/to/Crawl4AI_MCP",
-    )
+    connection_params=StdioConnectionParams(
+        server_params=StdioServerParameters(
+            command="uv",
+            args=["run", "python", "main.py"],
+            cwd="/path/to/Crawl4AI_MCP",
+        ),
+        timeout=60,
+    ),
+    # Optional: expose only a subset of tools to a given agent.
+    # tool_filter=["search_chunks", "get_crawl_stats"],
 )
+
+agent = LlmAgent(model="gemini-2.0-flash", name="researcher", tools=[toolset])
 ```
+
+> The exact import path for `StdioConnectionParams` / `StdioServerParameters`
+> tracks your installed `google-adk` version — adjust if your version differs.
+
+### Tool response contract
+
+Every tool returns a uniform envelope so the agent can branch reliably:
+
+```json
+{ "ok": true, "error": null, "data": { ... } }
+```
+
+Check `ok` first; read `data` on success or `error` on failure. Crawl tools
+(`crawl_url`, `crawl_many`, `deep_crawl`, `adaptive_crawl`) return only a short
+**preview** plus a `page_id` — the full, semantically-chunked content is stored
+in SQLite + ChromaDB. Retrieve it on demand with `search_chunks` instead of
+carrying whole pages in the agent's context window.
 
 ---
 

@@ -193,11 +193,13 @@ async def adaptive_crawl(
             "crawled_urls": [],
             "confidence_achieved": 0.0,
             "pages_with_content": 0,
-            "aggregated_fit_markdown": "",
+            "aggregated_preview": "",
+            "aggregated_word_count": 0,
             "stats": {},
             "session_id": session_id,
         }
 
+    _aggregated = "\n\n---\n\n".join(aggregated_fit_markdown)
     return {
         "success": True,
         "seed_url": seed_url,
@@ -206,7 +208,10 @@ async def adaptive_crawl(
         "pages_crawled": len(crawled_urls),
         "pages_with_content": pages_with_content,
         "crawled_urls": crawled_urls,
-        "aggregated_fit_markdown": "\n\n---\n\n".join(aggregated_fit_markdown),
+        # Full content is persisted + chunked; retrieve via search_chunks. Only a
+        # preview travels in the agent's context to keep the payload small.
+        "aggregated_preview": _aggregated[:500],
+        "aggregated_word_count": len(_aggregated.split()),
         "stats": {
             "target_confidence": target_confidence,
             "stopped_early": confidence >= target_confidence,

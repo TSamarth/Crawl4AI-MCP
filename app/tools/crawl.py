@@ -274,8 +274,19 @@ async def _persist_result(
     return page_id
 
 
+# Inline content preview length (chars). Full content lives in SQLite + ChromaDB;
+# the agent pulls it back on demand via search_chunks(page_id) rather than carrying
+# whole pages in its context window.
+_PREVIEW_CHARS = 300
+
+
 def _format_result(result: Any, page_id: str) -> Dict[str, Any]:
-    """Format a CrawlResult into the standard tool response dict."""
+    """Format a CrawlResult into the standard tool response dict.
+
+    Returns a short preview (not the full markdown) plus the ``page_id`` so the
+    caller can retrieve the complete, semantically-chunked content via
+    ``search_chunks``. This keeps per-page payloads small for the agent.
+    """
     meta = result.metadata or {}
     title = meta.get("title", "") if isinstance(meta, dict) else ""
 
@@ -294,14 +305,14 @@ def _format_result(result: Any, page_id: str) -> Dict[str, Any]:
         "url": result.url,
         "page_id": page_id,
         "title": title,
-        "raw_markdown": raw_md,
-        "fit_markdown": fit_md,
+        "fit_preview": fit_md[:_PREVIEW_CHARS],
         "internal_links": [lnk.get("href") for lnk in (result.links or {}).get("internal", [])],
         "external_links": [lnk.get("href") for lnk in (result.links or {}).get("external", [])],
         "metadata": {
             "word_count": len(raw_md.split()),
             "fit_word_count": len(fit_md.split()),
             "status_code": result.status_code,
+            "content_stored": bool(fit_md),
         },
         "screenshot_base64": result.screenshot or None,
         "error": result.error_message if not result.success else None,
@@ -347,7 +358,8 @@ async def crawl_url(
             config.LLM_EXTRACTION_ENABLED when specified).
 
     Returns:
-        Dict with success, url, title, raw_markdown, fit_markdown, links, metadata.
+        Dict with success, url, title, page_id, fit_preview, links, metadata.
+        Full content is stored — retrieve it via search_chunks using the page_id.
     """
     if ctx:
         await ctx.info(f"Crawling: {url}")

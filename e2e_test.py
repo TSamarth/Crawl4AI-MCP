@@ -88,11 +88,7 @@ def _parse(result: Any) -> Any:
       .data             — already-parsed Python dict/list (preferred)
       .content[0].text  — raw JSON string (fallback)
     """
-    # Fastest path: .data is pre-parsed by FastMCP
-    if hasattr(result, "data") and result.data is not None:
-        return result.data
-
-    # Fallback: parse from the first text content item
+    # Parse from the first text content item (the full JSON envelope)
     if hasattr(result, "content") and result.content:
         text = getattr(result.content[0], "text", "")
     elif isinstance(result, list) and result:
@@ -101,9 +97,14 @@ def _parse(result: Any) -> Any:
         text = str(result)
 
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except Exception:
         return text
+
+    # Unwrap the standard {ok, error, data} ToolResponse envelope.
+    if isinstance(parsed, dict) and "ok" in parsed and "data" in parsed:
+        return parsed["data"]
+    return parsed
 
 
 # ── Test parameters ───────────────────────────────────────────────────────────
@@ -264,8 +265,8 @@ async def run_e2e() -> int:
             info("fit_words",     data.get("metadata", {}).get("fit_word_count"))
             info("internal_links",len(data.get("internal_links", [])))
 
-            section("fit_markdown snippet")
-            snippet = (data.get("fit_markdown") or data.get("raw_markdown") or "")[:500]
+            section("fit_preview snippet")
+            snippet = (data.get("fit_preview") or "")[:500]
             for line in textwrap.wrap(snippet, 80):
                 print(f"    {_c(DIM, line)}")
 
